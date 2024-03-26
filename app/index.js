@@ -92,6 +92,7 @@ const _createWhatsappSession = async (clientId, socketGlobal) => {
             const localAuth = new LocalAuth({ clientId: clientId })
             const client = new Client({
                 puppeteer: {
+                    executablePath: '/usr/share/bash-completion/completions/chromium',
                     args: ['--no-sandbox', '--disable-setuid-sandbox'],
                     headless: true
                 },
