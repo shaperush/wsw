@@ -1,7 +1,5 @@
 const express = require('express');
-const { Client, LocalAuth, RemoteAuth, MessageMedia, Location } = require('whatsapp-web.js');
-const mongoose = require('mongoose');
-const { MongoStore } = require('wwebjs-mongo');
+const { Client, LocalAuth, MessageMedia, Location } = require('whatsapp-web.js');
 const { Server } = require("socket.io");
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
@@ -11,7 +9,6 @@ const crypto = require('crypto');
 const { sendNewMessagePush, setDeviceToken, removeDeviceToken } = require('./PushService')
 const http = require('http');
 const bodyParser = require('body-parser');
-const MONGODB_URI="mongodb+srv://shaperush:497u20r2d07YEDCn@cluster0.xp6tmay.mongodb.net/whatsappdb"
 const app = express();
 const port = 3000;
 const server = http.createServer(app);
