@@ -4,11 +4,13 @@ FROM node:20-alpine
 # Set the working directory
 WORKDIR /app
 
-RUN set -x \
-    && apk update \
-    && apk upgrade \
-    && apk add --no-cache \
-    chromium
+RUN apt-get update && apt-get install -y \
+    chromium \
+    libgbm-dev \
+    && rm -rf /var/lib/apt/lists/*
+        
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Copy package.json and package-lock.json to the working directory
 COPY package*.json ./
