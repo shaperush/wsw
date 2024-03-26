@@ -9,8 +9,7 @@ RUN set -x \
     && apk update \
     && apk upgrade \
     && apk add --no-cache \
-    chromium \
-    libgbm-dev 
+    chromium 
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
