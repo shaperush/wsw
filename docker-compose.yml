@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  app:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+    command: sh -c "npm install && npm start"
+    ports:
+      - "3000:3000"
+
