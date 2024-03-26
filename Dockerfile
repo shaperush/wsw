@@ -9,13 +9,12 @@ RUN set -x \
     && apk update \
     && apk upgrade \
     && apk add --no-cache \
-    chromium \
-    curl
+    chromium 
     
 
-RUN curl -LO https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-RUN apt-get install -y ./google-chrome-stable_current_amd64.deb
-RUN rm google-chrome-stable_current_amd64.deb 
+# RUN curl -LO https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+# RUN apt-get install -y ./google-chrome-stable_current_amd64.deb
+# RUN rm google-chrome-stable_current_amd64.deb 
 
 # Copy package.json and package-lock.json to the working directory
 COPY package*.json ./
