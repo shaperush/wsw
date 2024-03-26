@@ -10,6 +10,7 @@ RUN set -x \
     && apk upgrade \
     && apk add --no-cache \
     chromium 
+    
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true 
 
@@ -18,7 +19,7 @@ COPY package*.json ./
 
 # Install the dependencies
 RUN npm ci --only=production --ignore-scripts
-
+RUN npx playwright install-deps
 # Copy the rest of the source code to the working directory
 COPY . .
 
