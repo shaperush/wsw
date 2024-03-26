@@ -4,10 +4,6 @@ FROM node:20-alpine
 # Set the working directory
 WORKDIR /app
 
-# Install Chromium
-ENV CHROME_BIN="/usr/bin/chromium-browser" \
-    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD="true" \
-    NODE_ENV="production"
 RUN set -x \
     && apk update \
     && apk upgrade \
