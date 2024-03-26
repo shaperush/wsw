@@ -21,7 +21,7 @@ COPY package*.json ./
 
 # Install the dependencies
 RUN npm ci --only=production --ignore-scripts
-RUN npm init
+# RUN npm init
 # Copy the rest of the source code to the working directory
 COPY . .
 
