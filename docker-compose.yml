@@ -7,7 +7,6 @@ services:
       - .:/app
     environment:
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
     command: sh -c "npm install && npm start"
     ports:
