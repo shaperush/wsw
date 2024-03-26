@@ -11,8 +11,7 @@ RUN set -x \
     && apk add --no-cache \
     chromium 
 
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true 
 
 # Copy package.json and package-lock.json to the working directory
 COPY package*.json ./
