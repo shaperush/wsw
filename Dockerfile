@@ -1,5 +1,5 @@
 # Use the official Node.js Alpine image as the base image
-FROM node:20-alpine
+FROM node:latest
 
 # Set the working directory
 WORKDIR /app
@@ -17,10 +17,12 @@ RUN set -x \
 # RUN rm google-chrome-stable_current_amd64.deb 
 
 # Copy package.json and package-lock.json to the working directory
-COPY package*.json ./
+COPY package.json ./
+COPY package-lock.json ./
 
 # Install the dependencies
 RUN npm ci --only=production --ignore-scripts
+RUN npm install
 # RUN npm init
 # Copy the rest of the source code to the working directory
 COPY . .
