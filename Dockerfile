@@ -48,17 +48,6 @@ RUN apt-get update && apt-get install -y \
             xdg-utils \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Google Chrome Stable
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
-
-# Prevent Puppeteer from downloading its own bundled version of Chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
     
 
 # RUN curl -LO https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
@@ -71,7 +60,7 @@ COPY package-lock.json ./
 
 # Install the dependencies
 RUN npm ci --only=production --ignore-scripts
-RUN npm install
+RUN npm install whatsapp-web.js
 # RUN npm init
 # Copy the rest of the source code to the working directory
 COPY . .
