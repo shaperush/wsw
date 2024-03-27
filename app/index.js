@@ -92,7 +92,7 @@ const _createWhatsappSession = async (clientId, socketGlobal) => {
             const localAuth = new LocalAuth({ clientId: clientId })
             const client = new Client({
                 puppeteer: {
-                    executablePath: '/var/lib/docker/overlay2/u599jc9ilichhp6dhcj2gnt2t/diff/opt/google/chrome/chrome',
+                    executablePath: '/root/.cache/puppeteer/chrome/linux-122.0.6261.69/chrome-linux64/chrome',
                     args: ['--no-sandbox', '--disable-setuid-sandbox'],
                     headless: true
                 },
