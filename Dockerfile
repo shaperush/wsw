@@ -7,7 +7,7 @@ WORKDIR /app
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD true
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -yq udev chromium git && npm install http-server -g
+RUN apt-get update && apt-get install -yq udev chromium
 
 # Install Puppeteer dependencies
 RUN apt-get update && apt-get install -y \
