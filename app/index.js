@@ -16,6 +16,7 @@ const path = require('path');
 const sessions = new Map();
 const socketList = new Map();
 let store;
+const wwebVersion = '2.2407.3';
 const filterType = ['emoji', 'chat', 'ptt','image', 'document', 'video', 'location', 'gif', 'vcard', 'sticker', /*'poll_creation',*/ 'audio', 'revoked'];
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
@@ -96,7 +97,10 @@ const _createWhatsappSession = async (clientId, socketGlobal) => {
                     args: ['--no-sandbox', '--disable-setuid-sandbox'],
                     headless: true
                 },
-                /*qrMaxRetries: 5,*/
+                webVersionCache: {
+                    type: 'remote',
+                    remotePath: `https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/${wwebVersion}.html`,
+                },
                 authStrategy: localAuth
             });
 
