@@ -13,8 +13,10 @@ const app = express();
 const port = 3000;
 const server = http.createServer(app);
 const path = require('path');
+const rimraf = require("rimraf");
 const sessions = new Map();
 const socketList = new Map();
+const activeSocketList = new Map();
 let store;
 const wwebVersion = '2.2407.3';
 const filterType = ['emoji', 'chat', 'ptt','image', 'document', 'video', 'location', 'gif', 'vcard', 'sticker', /*'poll_creation',*/ 'audio', 'revoked'];
@@ -78,11 +80,14 @@ const sendMessage = (socket, action, body) => {
 }
 
 const sendErrorResponse = (socket, status, message) => {
+    if (!socket) { return }
     socket.emit("error", JSON.stringify({ status, message }));
 }
 
 const _createWhatsappSession = async (clientId, socketGlobal) => {
     socketList.set(clientId, socketGlobal);
+    activeSocketList.set(socketGlobal?.id, clientId);
+
     if (sessions.has(clientId)) {
         const client = sessions.get(clientId);
         const state = await client.getState();
@@ -104,11 +109,23 @@ const _createWhatsappSession = async (clientId, socketGlobal) => {
                 authStrategy: localAuth
             });
 
-    
-            sendMessage(socketList.get(clientId), 'authenticateStateResponse', { state: "LOADING" });
+            sessions.set(clientId, client);
 
             client.on('loading_screen', (percent, message) => {
                 console.log('LOADING SCREEN', percent, message);
+
+                try {
+                    const socket = socketList.get(clientId);
+                    const state = "LOADING"
+                    if (!socket) { throw new Error('socket error') }
+
+                    sendMessage(socket, 'authenticateStateResponse', { state });
+                } catch (error) {
+                    const socket = socketList.get(clientId);
+                    if (socket) { 
+                        sendErrorResponse(socket, 500, error.message);
+                    }
+                }
             });
 
             client.on('change_state', (state) => {
@@ -123,27 +140,36 @@ const _createWhatsappSession = async (clientId, socketGlobal) => {
                 console.log('DISCONNECTED: ', clientId, session);
                 try {
                     const socket = socketList.get(clientId);
-    
-                    await deleteSession(clientId, true)
+                    await deleteSession(clientId, true, socket?.id)
                     const state = "LOGOUT"
 
                     if (!socket) { throw new Error('socket error') }
 
                     sendMessage(socket, 'authenticateStateResponse', { state });
                 } catch (error) {
-                    sendErrorResponse(socket, 500, error.message)
+                    const socket = socketList.get(clientId);
+                    if (socket) { 
+                        sendErrorResponse(socket, 500, error.message);
+                    }
                 }
             });
     
-            client.on("qr", (qr) => {
+            client.on("qr", async (qr) => {
                 console.log("QR RECEIVED", qr, clientId);
                 try {
+                    // IF socket disconnect - stop send qr code and clear session
                     const socket = socketList.get(clientId);
-                    if (!socket) { throw new Error('socket error') }
+                    if (!socket) { 
+                        await deleteSession(clientId, true);
+                        throw new Error('socket error');
+                    }
 
                     sendMessage(socket, 'qr', { qr });
                 } catch (error) {
-                    sendErrorResponse(socket, 500, error.message)
+                    const socket = socketList.get(clientId);
+                    if (socket) { 
+                        sendErrorResponse(socket, 500, error.message);
+                    }
                 }
             });
 
@@ -154,7 +180,7 @@ const _createWhatsappSession = async (clientId, socketGlobal) => {
                     if (!socket) { throw new Error('remote_session_saved socket error') }
                     sendMessage(socket, 'saveSession', { clientId })
                 } catch (error) {
-                    sendErrorResponse(socket, 500, error.message)
+                    sendErrorResponse(socket, 500, error.message);
                 }
             });
         
@@ -166,7 +192,10 @@ const _createWhatsappSession = async (clientId, socketGlobal) => {
 
                     sendMessage(socket, 'authenticated', { clientId });
                 } catch (error) {
-                    sendErrorResponse(socket, 500, error.message)
+                    const socket = socketList.get(clientId);
+                    if (socket) { 
+                        sendErrorResponse(socket, 500, error.message);
+                    }
                 }
             });
         
@@ -177,10 +206,13 @@ const _createWhatsappSession = async (clientId, socketGlobal) => {
                     const state = await client.getState();
                     const socket = socketList.get(clientId);
                     if (!socket) { throw new Error('socket error') }
-                    sessions.set(clientId, client);
+        
                     sendMessage(socket, 'ready', { state });
                 } catch (error) {
-                    sendErrorResponse(socket, 500, error.message)
+                    const socket = socketList.get(clientId);
+                    if (socket) { 
+                        sendErrorResponse(socket, 500, error.message);
+                    }
                 }
             });
 
@@ -193,9 +225,12 @@ const _createWhatsappSession = async (clientId, socketGlobal) => {
 
                     sendNewMessagePush(clientId, message, chat.name);
                     _updateMessageList(msg, false, clientId);
-            } catch (error) {
-                sendErrorResponse(socket, 500, error.message)
-            }
+                } catch (error) {
+                    const socket = socketList.get(clientId);
+                    if (socket) { 
+                        sendErrorResponse(socket, 500, error.message);
+                    }
+                }
             });
         
             client.on('message_create', async (msg) => {
@@ -250,7 +285,10 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('user disconnected', socket?.id);
-        socketList.delete(socket?.id);
+        const clientId = activeSocketList.get(socket?.id);
+        if (clientId) { socketList.delete(clientId); }
+
+        activeSocketList.delete(socket?.id);
     });
 
     socket.on("connected",(data)=> {
@@ -533,7 +571,7 @@ io.on('connection', (socket) => {
             console.log("LOGOUT REQUEST");
             const { sessionId } = data;
             if (!checkAuthenticated(sessionId)) { throw new Error('Auth failed') }
-            await deleteSession(sessionId, false);
+            await deleteSession(sessionId, false, socket?.id);
             
             sendMessage(socket, 'logoutResponse',  { sessionId: socket?.id });
         } catch (error) {
@@ -598,7 +636,9 @@ const _updateMessageList = async (msg, isTo, clientId) => {
 
     } catch (error) {
         const socket = socketList.get(clientId);
-        sendErrorResponse(socket, 500, error.message)
+        if (socket) { 
+            sendErrorResponse(socket, 500, error.message);
+        }
     }
 }
 
@@ -741,8 +781,9 @@ function convertBase64OggToBase64Mp3(base64Ogg, callback) {
         .save(tempMp3Path);
 }
 
-const deleteSession = async (sessionId, onlyDestroy) => {
+const deleteSession = async (sessionId, onlyDestroy, socketId) => {
     try {
+        console.log("DELETE SESSION ", sessionId, onlyDestroy, socketId);
         const client = sessions.get(sessionId)
         if (!client) {  throw new Error('Undefined session id')}
         client.pupPage.removeAllListeners('close');
@@ -757,10 +798,14 @@ const deleteSession = async (sessionId, onlyDestroy) => {
         while (client.pupBrowser.isConnected()) {
             await new Promise(resolve => setTimeout(resolve, 100));
         }
-
+    
         sessions.delete(sessionId);
         socketList.delete(sessionId);
+        if (socketId) { activeSocketList.delete(socketId); }
         removeDeviceToken(sessionId);
+        const pathToDelete = ".wwebjs_auth/session-" + sessionId;
+        rimraf.sync(pathToDelete);
+        console.log(pathToDelete);
     } catch (error) {
       console.log(error)
       throw error
