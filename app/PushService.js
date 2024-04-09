@@ -1,11 +1,11 @@
 const PushNotifications = require('node-pushnotifications');
-const topic = 'app.user.WhatsappWhatch.watchkitapp';
+const topic = 'com.bestdevs.development.watchkitapp';
 const settings = {
     apn: {
         token: {
-            key: './cert/AuthKey_MJ9F6ZBCVH.p8', 
-            keyId: 'MJ9F6ZBCVH',
-            teamId: 'RL8RZDCK3Q',
+            key: './cert/AuthKey_4QS5DPT92S.p8', 
+            keyId: '4QS5DPT92S',
+            teamId: 'QY5934K5B6',
         },
         production: false
     },
