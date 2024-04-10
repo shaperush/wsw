@@ -35,6 +35,7 @@ app.get('/', (req, res) => {
     res.send('<h1>Hello</h1>');
 });
 
+
 app.get('/getMedia', async (req, res) => {
     try { 
         const sessionId = req.query.sessionId;
@@ -68,6 +69,36 @@ app.get('/getMedia', async (req, res) => {
     } catch (error) {
         console.log(error.message);
         res.send(JSON.stringify(error.message));
+    }
+});
+
+app.get('/getMessageListRequest', async (req, res) => {
+    try { 
+        console.log("getMessageListRequestHttp")
+        const sessionId = req.query.sessionId;
+        const limit = req.query.limit;
+        const chatId = req.query.chatId;
+ 
+        if (!sessionId || !limit || !chatId) { throw new Error('Session not Found') }
+
+        if (!checkAuthenticated(sessionId)) { throw new Error('Auth failed') }
+        
+        const client = sessions.get(sessionId)
+        const chat = await client.getChatById(chatId);
+        if (!chat) { throw new Error('Chat not Found') }
+        await chat.sendSeen();
+
+        const messageListData = await chat.fetchMessages({limit: limit});
+
+        var messages = messageListData.map( (message) => {
+            return _messageObject(message);
+        });
+
+        sendSuccess(res, messages);
+
+    } catch (error) {
+        console.log(error.message);
+        sendError(res, error.message);
     }
 });
 
@@ -350,6 +381,7 @@ io.on('connection', (socket) => {
 
     socket.on('getMessageListRequest',async (data) => {
         try {
+            console.log("getMessageListRequest")
             const { sessionId, chatId, limit } = data
             if (!checkAuthenticated(sessionId)) { throw new Error('Auth failed') }
             
@@ -498,16 +530,50 @@ io.on('connection', (socket) => {
 
     socket.on('sendReplyMessageRequest',async (data) => {
         try {
-            const { sessionId, messageId, chatId, content, destinationChatId} = data
+            const { sessionId, messageId, chatId, content, destinationChatId, contentType} = data
             if (!checkAuthenticated(sessionId)) { throw new Error('Auth failed') }
 
-            var options = {};
             const client = sessions.get(sessionId);
             const message = await _getMessageById(client, messageId, chatId);
             if (!message) { throw new Error('Message not Found') }
-
-            const repliedMessage = await message.reply(content, destinationChatId, options);
-            sendMessage(socket, 'replyMessageResponse',  repliedMessage);
+            var options = {};
+            switch (contentType) {
+                case 'string':
+                    const repliedMessage = await message.reply(content, destinationChatId, options);
+                    sendMessage(socket, 'replyMessageResponse',  repliedMessage);
+                        
+                    break;
+                case 'media': {
+                    const oggBuffer = Buffer.from(content.data, 'base64');
+                    const tempOggPath = `temp_${crypto.randomBytes(16).toString('hex')}.aac`;
+                    const tempMp3Path = `temp_${crypto.randomBytes(16).toString('hex')}.mp3`;
+                    fs.writeFileSync(tempOggPath, oggBuffer);
+                    ffmpeg(tempOggPath)
+                        .toFormat('mp3')
+                        .audioBitrate('24k')
+                        .on('end', async function() {
+                            const messageMedia = MessageMedia.fromFilePath(tempMp3Path);
+                            const repliedMessage = await message.reply(messageMedia, destinationChatId, { sendAudioAsVoice: true });
+                            sendMessage(socket, 'replyMessageResponse',  repliedMessage);
+                            fs.unlinkSync(tempOggPath);
+                            fs.unlinkSync(tempMp3Path);
+                        })
+                        .on('error', function(err) {
+                            console.log('An error occurred: ' + err.message);
+                            fs.unlinkSync(tempOggPath);
+                            fs.unlinkSync(tempMp3Path);
+                            callback(err, null);
+                        })
+                        .save(tempMp3Path);
+                    break
+                }
+                case 'location': {
+                    const location = new Location(content.latitude, content.longitude, content.description);
+                    const repliedMessage = await message.reply(location, destinationChatId, options);
+                    sendMessage(socket, 'replyMessageResponse',  repliedMessage);
+                    break;
+                }
+            } 
         } catch (error) {
             sendErrorResponse(socket, 500, error.message)
         }
@@ -518,7 +584,7 @@ io.on('connection', (socket) => {
         try {
             const { sessionId, messageId, chatId, everyone } = data
             if (!checkAuthenticated(sessionId)) { throw new Error('Auth failed') }
-
+            console.log(data);
             const client = sessions.get(sessionId);
             const message = await _getMessageById(client, messageId, chatId)
             if (!message) { throw new Error('Message not Found') }
@@ -526,6 +592,7 @@ io.on('connection', (socket) => {
             const result = await message.delete(everyone)
             sendMessage(socket, 'deleteMessageResponse',  result);
           } catch (error) {
+            console.log("sendDeleteMessageRequest", error.message);
             sendErrorResponse(socket, 500, error.message)
           }
     });
@@ -579,16 +646,14 @@ io.on('connection', (socket) => {
             sendErrorResponse(socket, 500, error.message)
         }
     });
-
-
-    const checkAuthenticated = (sessionId) => {
-        if (!sessions.has(sessionId)) {
-            sendMessage(socket, 'authenticateStateResponse', { state: "UNPAIRED" });
-            return false
-        }
-        return true
-    } 
 }); 
+
+const checkAuthenticated = (sessionId) => {
+    if (!sessions.has(sessionId)) {
+        return false
+    }
+    return true
+} 
 
 const _revokeMessage = async (msg, clientId, forMe) => {
     try {
@@ -642,6 +707,14 @@ const _updateMessageList = async (msg, isTo, clientId) => {
     }
 }
 
+const sendSuccess = (res, data) => {
+    res.send(JSON.stringify({status: 200, body: data, error: "" }));
+}
+
+const sendError = (res, error) => {
+    res.send(JSON.stringify({status: 400, body: {}, erorr: error }));
+}
+
 const _getMessageById = async (client, messageId, chatId) => {
     const chat = await client.getChatById(chatId)
     const messages = await chat.fetchMessages({ limit: 100 })
@@ -653,7 +726,7 @@ const _messageObject = (message) => {
     var messageId = message.id.id;
     var type = message.type;
     var date = message.timestamp;
-    var body = message._data?.body;
+    var body = (typeof message._data?.body === 'string') ? message._data?.body : ""
     var author = message.author;
     var duration = message.duration;
     var ack = message.ack;
