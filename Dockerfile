@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -yq udev chromium
 
 # Install Puppeteer dependencies
 RUN apt-get update && apt-get install -y \
+    FFmpeg \
     wget \
     gconf-service \
     libgbm-dev \
