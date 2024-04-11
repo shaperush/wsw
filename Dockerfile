@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -yq udev chromium
 
-RUN apt-get update && apt-get install -y FFmpeg
+RUN apt-get update && apt-get install -yq ffmpeg
 
 # Install Puppeteer dependencies
 RUN apt-get update && apt-get install -y \
