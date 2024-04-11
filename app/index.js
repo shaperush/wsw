@@ -22,6 +22,9 @@ const wwebVersion = '2.2407.3';
 const filterType = ['emoji', 'chat', 'ptt','image', 'document', 'video', 'location', 'gif', 'vcard', 'sticker', /*'poll_creation',*/ 'audio', 'revoked'];
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
+app.use(bodyParser.json({ limit: 1000000 + 1000000 }))
+app.use(bodyParser.urlencoded({ limit: 1000000 + 1000000, extended: true }))
+
 const io = new Server(server,{
     cors: {
         origin: '*',
@@ -33,6 +36,118 @@ app.use(bodyParser.json());
 
 app.get('/', (req, res) => {
     res.send('<h1>Hello</h1>');
+});
+
+app.post('/sendMessageRequest', async (req, res) => {
+    try {
+        const sessionId = req.body.sessionId;
+        const data = req.body.body
+        const { location, message, media, chatId, contentType, temporaryId } = data;
+
+        if (!checkAuthenticated(sessionId)) { throw new Error('Auth failed') }
+        const client = sessions.get(sessionId);
+        let messageOut;
+        let options = { caption: temporaryId};
+        switch (contentType) {
+            case 'string':
+                const messageOut = await client.sendMessage(chatId, message, options);
+                sendSuccess(res, messageOut);
+                    
+                break;
+            case 'media': {
+                const oggBuffer = Buffer.from(media.data, 'base64');
+                const tempOggPath = `temp_${crypto.randomBytes(16).toString('hex')}.aac`;
+                const tempMp3Path = `temp_${crypto.randomBytes(16).toString('hex')}.mp3`;
+                fs.writeFileSync(tempOggPath, oggBuffer);
+                ffmpeg(tempOggPath)
+                    .toFormat('mp3')
+                    .audioBitrate('24k')
+                    .on('end', async function() {
+                        const messageMedia = MessageMedia.fromFilePath(tempMp3Path);
+                        const messageOut = await client.sendMessage(chatId, messageMedia, { sendAudioAsVoice: true, caption: temporaryId});
+                        sendSuccess(res, messageOut);
+                        fs.unlinkSync(tempOggPath);
+                        fs.unlinkSync(tempMp3Path);
+                        
+                    })
+                    .on('error', function(err) {
+                        console.log('An error occurred: ' + err.message);
+                        fs.unlinkSync(tempOggPath);
+                        fs.unlinkSync(tempMp3Path);
+                        callback(err, null);
+                    })
+                    .save(tempMp3Path);
+                break
+            }
+            case 'location': {
+                const locationResponse = new Location(location.latitude, location.longitude, location.description);
+                const messageOut = await client.sendMessage(chatId, locationResponse, options);
+                sendSuccess(res, messageOut);
+                break;
+            }
+        } 
+        
+    } catch (error) {
+        console.log('UserError:', error);
+        sendError(res, error.message);
+    }
+});
+
+app.post('/sendReplyRequest', async (req, res) => {
+    try {
+        const sessionId = req.body.sessionId;
+        const data = req.body.body
+        const { location, message, media, messageId, chatId, contentType, temporaryId } = data;
+
+        if (!checkAuthenticated(sessionId)) { throw new Error('Auth failed') }
+        const client = sessions.get(sessionId);
+        const replyMessage = await _getMessageById(client, messageId, chatId);
+        if (!currentMessage) { throw new Error('Message not Found') }        
+        let options = { caption: temporaryId };
+
+        switch (contentType) {
+            case 'string':
+                const messageResponse = await replyMessage.reply(message, chatId, options);
+                sendSuccess(res, messageResponse);
+                    
+                break;
+            case 'media': {
+                const oggBuffer = Buffer.from(media.data, 'base64');
+                const tempOggPath = `temp_${crypto.randomBytes(16).toString('hex')}.aac`;
+                const tempMp3Path = `temp_${crypto.randomBytes(16).toString('hex')}.mp3`;
+                fs.writeFileSync(tempOggPath, oggBuffer);
+                ffmpeg(tempOggPath)
+                    .toFormat('mp3')
+                    .audioBitrate('24k')
+                    .on('end', async function() {
+                        const messageMedia = MessageMedia.fromFilePath(tempMp3Path);
+                        const messageResponse = await replyMessage.reply(messageMedia, chatId, { sendAudioAsVoice: true, caption: temporaryId });
+                        sendSuccess(res, {});
+                        fs.unlinkSync(tempOggPath);
+                        fs.unlinkSync(tempMp3Path);
+                        
+                    })
+                    .on('error', function(err) {
+                        console.log('An error occurred: ' + err.message);
+                        fs.unlinkSync(tempOggPath);
+                        fs.unlinkSync(tempMp3Path);
+                        callback(err, null);
+                    })
+                    .save(tempMp3Path);
+                break
+            }
+            case 'location': {
+                const locationResponse = new Location(location.latitude, location.longitude, location.description);
+                const messageResponse = await replyMessage.reply(locationResponse, chatId, options);
+                sendSuccess(res, messageResponse);
+                break;
+            }
+        } 
+        
+    } catch (error) {
+        console.log('UserError:', error);
+        sendError(res, error.message);
+    }
 });
 
 
@@ -530,13 +645,14 @@ io.on('connection', (socket) => {
 
     socket.on('sendReplyMessageRequest',async (data) => {
         try {
-            const { sessionId, messageId, chatId, content, destinationChatId, contentType} = data
+            console.log('sendReplyMessageRequest');
+            const { sessionId, messageId, chatId, content, destinationChatId, contentType, temporaryId} = data
             if (!checkAuthenticated(sessionId)) { throw new Error('Auth failed') }
 
             const client = sessions.get(sessionId);
             const message = await _getMessageById(client, messageId, chatId);
             if (!message) { throw new Error('Message not Found') }
-            var options = {};
+            let options = { caption: temporaryId };
             switch (contentType) {
                 case 'string':
                     const repliedMessage = await message.reply(content, destinationChatId, options);
@@ -553,7 +669,7 @@ io.on('connection', (socket) => {
                         .audioBitrate('24k')
                         .on('end', async function() {
                             const messageMedia = MessageMedia.fromFilePath(tempMp3Path);
-                            const repliedMessage = await message.reply(messageMedia, destinationChatId, { sendAudioAsVoice: true });
+                            const repliedMessage = await message.reply(messageMedia, destinationChatId, { sendAudioAsVoice: true, caption: temporaryId });
                             sendMessage(socket, 'replyMessageResponse',  repliedMessage);
                             fs.unlinkSync(tempOggPath);
                             fs.unlinkSync(tempMp3Path);
@@ -575,6 +691,7 @@ io.on('connection', (socket) => {
                 }
             } 
         } catch (error) {
+            console.log('sendReplyMessageRequest', error.message);
             sendErrorResponse(socket, 500, error.message)
         }
     });

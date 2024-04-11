@@ -3,7 +3,7 @@ const topic = 'com.bestdevs.development.watchkitapp';
 const settings = {
     apn: {
         token: {
-            key: './cert/AuthKey_4QS5DPT92S.p8', 
+            key: './app/cert/AuthKey_4QS5DPT92S.p8', 
             keyId: '4QS5DPT92S',
             teamId: 'QY5934K5B6',
         },
@@ -17,8 +17,10 @@ const registationIds = new Map();
 const sendNewMessagePush = (clientId, message, chatName) => {
     try {
         const deviceToken = registationIds.get(clientId);
+        console.log("SEND PUSH START")
         if (!deviceToken) { throw new Error('Undefined registration id'); }
-        const data = { alert: { title: chatName, subtitle: message },
+        console.log("SEND PUSH END")
+        const data = { alert: { title: chatName, body: message },
                         topic: topic,
                         expiry: 0,
                         pushType: 'alert',
@@ -28,6 +30,7 @@ const sendNewMessagePush = (clientId, message, chatName) => {
 
         push.send(deviceToken, data, (err, result) => {
             if (err) { 
+                console.log('Error send push', err);
                 throw new Error('Message not Found') 
             } 
         });
