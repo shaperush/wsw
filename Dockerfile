@@ -7,11 +7,10 @@ WORKDIR /app
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD true
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -yq udev chromium
+RUN apt-get update && apt-get install -yq udev chromium FFmpeg
 
 # Install Puppeteer dependencies
 RUN apt-get update && apt-get install -y \
-    FFmpeg \
     wget \
     gconf-service \
     libgbm-dev \
