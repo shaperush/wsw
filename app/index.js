@@ -46,12 +46,11 @@ app.post('/sendMessageRequest', async (req, res) => {
 
         if (!checkAuthenticated(sessionId)) { throw new Error('Auth failed') }
         const client = sessions.get(sessionId);
-        let messageOut;
         let options = { caption: temporaryId};
         switch (contentType) {
             case 'string':
                 const messageOut = await client.sendMessage(chatId, message, options);
-                sendSuccess(res, messageOut);
+                sendSuccess(res, "success");
                     
                 break;
             case 'media': {
@@ -65,7 +64,7 @@ app.post('/sendMessageRequest', async (req, res) => {
                     .on('end', async function() {
                         const messageMedia = MessageMedia.fromFilePath(tempMp3Path);
                         const messageOut = await client.sendMessage(chatId, messageMedia, { sendAudioAsVoice: true, caption: temporaryId});
-                        sendSuccess(res, messageOut);
+                        sendSuccess(res, "success");
                         fs.unlinkSync(tempOggPath);
                         fs.unlinkSync(tempMp3Path);
                         
@@ -82,7 +81,7 @@ app.post('/sendMessageRequest', async (req, res) => {
             case 'location': {
                 const locationResponse = new Location(location.latitude, location.longitude, location.description);
                 const messageOut = await client.sendMessage(chatId, locationResponse, options);
-                sendSuccess(res, messageOut);
+                sendSuccess(res, "success");
                 break;
             }
         } 
@@ -93,7 +92,7 @@ app.post('/sendMessageRequest', async (req, res) => {
     }
 });
 
-app.post('/sendReplyRequest', async (req, res) => {
+app.post('/sendReplyMessageRequest', async (req, res) => {
     try {
         const sessionId = req.body.sessionId;
         const data = req.body.body
@@ -102,13 +101,13 @@ app.post('/sendReplyRequest', async (req, res) => {
         if (!checkAuthenticated(sessionId)) { throw new Error('Auth failed') }
         const client = sessions.get(sessionId);
         const replyMessage = await _getMessageById(client, messageId, chatId);
-        if (!currentMessage) { throw new Error('Message not Found') }        
+        if (!replyMessage) { throw new Error('Message not Found') }        
         let options = { caption: temporaryId };
 
         switch (contentType) {
             case 'string':
                 const messageResponse = await replyMessage.reply(message, chatId, options);
-                sendSuccess(res, messageResponse);
+                sendSuccess(res, "success");
                     
                 break;
             case 'media': {
@@ -122,7 +121,7 @@ app.post('/sendReplyRequest', async (req, res) => {
                     .on('end', async function() {
                         const messageMedia = MessageMedia.fromFilePath(tempMp3Path);
                         const messageResponse = await replyMessage.reply(messageMedia, chatId, { sendAudioAsVoice: true, caption: temporaryId });
-                        sendSuccess(res, {});
+                        sendSuccess(res, "success");
                         fs.unlinkSync(tempOggPath);
                         fs.unlinkSync(tempMp3Path);
                         
@@ -139,7 +138,7 @@ app.post('/sendReplyRequest', async (req, res) => {
             case 'location': {
                 const locationResponse = new Location(location.latitude, location.longitude, location.description);
                 const messageResponse = await replyMessage.reply(locationResponse, chatId, options);
-                sendSuccess(res, messageResponse);
+                sendSuccess(res, "success");
                 break;
             }
         } 
@@ -372,6 +371,7 @@ const _createWhatsappSession = async (clientId, socketGlobal) => {
                     sendNewMessagePush(clientId, message, chat.name);
                     _updateMessageList(msg, false, clientId);
                 } catch (error) {
+                    console.log("ERRRORRRR", error);
                     const socket = socketList.get(clientId);
                     if (socket) { 
                         sendErrorResponse(socket, 500, error.message);
@@ -432,7 +432,11 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log('user disconnected', socket?.id);
         const clientId = activeSocketList.get(socket?.id);
-        if (clientId) { socketList.delete(clientId); }
+
+        if (clientId) {
+             const socketFormList = socketList.get(clientId);
+             if (socketFormList?.id === socket?.id) { socketList.delete(clientId); }
+        }
 
         activeSocketList.delete(socket?.id);
     });
@@ -795,8 +799,9 @@ const _revokeMessage = async (msg, clientId, forMe) => {
 
 const _updateMessageList = async (msg, isTo, clientId) => {
     try {
+        console.log("START SEND");
         const socket = socketList.get(clientId);
-        if (!socket) { return }
+        if (!socket) { throw new Error('UNDEFINED SOCKET In socketList') }
 
         const client = sessions.get(clientId);
         if (!client)  { throw new Error('Client not Found') }
@@ -807,7 +812,7 @@ const _updateMessageList = async (msg, isTo, clientId) => {
         const chat = await client.getChatById(msg._data.id.remote);
         if (!chat) { throw new Error('Chat not Found') }
         
-        const chatObject = _getChatObjectWithMessage(chat, messageObject, !msg._data.id.fromMe);
+        const chatObject =  _getChatObjectWithMessage(chat, messageObject, !msg._data.id.fromMe);
         sendMessage(socket, 'getChatListResponse', [chatObject]);
 
         if (messageObject.type === 'sticker') {
@@ -815,8 +820,10 @@ const _updateMessageList = async (msg, isTo, clientId) => {
             const mediaMessage = await _messageMediaObject(msg, chatId, []);
             sendMessage(socket, 'getMessageMediaListResponse',  [mediaMessage]);
         }
+        console.log("sendMessag!!!!!!!!e", socket?.id);
 
     } catch (error) {
+        console.log("ERRROOOORRR", error);
         const socket = socketList.get(clientId);
         if (socket) { 
             sendErrorResponse(socket, 500, error.message);
@@ -927,7 +934,7 @@ const _getChatObjectWithMessage = (chat, message, isNewReceive) => {
     const date = message.date;
     const isArchived = chat.archived ?? false;
     const isGroup = chat.isGroup;
-    const unreadCount = isNewReceive ? chat.unreadCount + 1 : chat.unreadCount;
+    const unreadCount =  isNewReceive ? chat.unreadCount + 1 : chat.unreadCount;
     const lastMessage = message;
     const chatData = { chatId, name, date, isArchived, isGroup, unreadCount, lastMessage };
     return chatData;
